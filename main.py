@@ -7,7 +7,7 @@ import torch.optim as optim
 import pandas as pd
 import numpy as np
 
-from ResNet import Bottleneck, ResNet, ResNet50
+from ResNet import Bottleneck, ResNet, ResNet50, ResNet18, ResNet34, ResNet101, ResNet152
 from torch.utils.data import Dataset
 from torch.utils.data.dataset import random_split
 from torchvision import models
@@ -65,9 +65,11 @@ train_dataset, test_dataset = random_split(dataset, [int(train_size),int(test_si
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size = 64, shuffle=True, num_workers=0)
 testloader = torch.utils.data.DataLoader(test_dataset, batch_size = 64, shuffle=True, num_workers=0)
 
-classes = [0, 1, 2, 3, 4, 5]
+#classes = [0, 1, 2, 3, 4, 5]
+classes = ['0', '1', '2', '3', '4', '5']
 
-net = ResNet50(6, 1).to('cuda')
+#net = ResNet50(6, 1).to('cuda')
+net = ResNet18(6, 1).to('cuda')
 
 summary(net, (1, 108, 12))
 
@@ -77,7 +79,7 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor = 0.1, patien
 
 correct = 0
 total = 0
-EPOCHS = 10
+EPOCHS = 1000
 print('-- Start training : ', EPOCHS, 'epochs')
 for epoch in range(EPOCHS):
     losses = []
