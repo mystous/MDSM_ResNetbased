@@ -75,6 +75,8 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0001)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor = 0.1, patience=5)
 
+correct = 0
+total = 0
 EPOCHS = 5000
 print('-- Start training : ', EPOCHS, 'epochs')
 for epoch in range(EPOCHS):
@@ -102,9 +104,6 @@ for epoch in range(EPOCHS):
     scheduler.step(avg_loss)
 
 print('Training Done')
-
-correct = 0
-total = 0
 
 with torch.no_grad():
     for data in testloader:
