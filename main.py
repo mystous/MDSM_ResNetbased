@@ -77,11 +77,13 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor = 0.1, patien
 
 correct = 0
 total = 0
-EPOCHS = 5000
+EPOCHS = 10
 print('-- Start training : ', EPOCHS, 'epochs')
 for epoch in range(EPOCHS):
     losses = []
     running_loss = 0
+    train_loss = 0
+    train_acc = 0
     for i, inp in enumerate(trainloader):
         inputs, labels = inp
         inputs, labels = inputs.to('cuda'), labels.to('cuda')
@@ -95,6 +97,10 @@ for epoch in range(EPOCHS):
         optimizer.step()
 
         running_loss += loss.item()
+        train_loss += loss.item()
+        
+        pred = outputs.data.max(1, keepdim=True)[1]
+        train_acc += pred.eq(labels.data.view_as(pred)).sum()
 
         if i%100 == 0 and i > 0:
             print(f'Loss [{epoch+1}/{EPOCHS}, {i}](epoch, minibatch): ', f'{running_loss / 100:.5f}')
@@ -102,6 +108,9 @@ for epoch in range(EPOCHS):
 
     avg_loss = sum(losses)/len(losses)
     scheduler.step(avg_loss)
+    
+    train_loss /= len(trainloader.dataset)
+    print('Train Epoch: {} Average loss: {:.4f} Accuracy : {:.4f}%)'.format(epoch, train_loss, 100. * train_acc / len(trainloader.dataset)))
 
 print('Training Done')
 
