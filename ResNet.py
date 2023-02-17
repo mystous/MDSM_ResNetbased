@@ -146,11 +146,14 @@ class BasicBlock(nn.Module):
                 nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(out_planes)
             )
+        self.dropout = nn.Dropout(0.25)
     
     def forward(self, x):
         out = self.conv1(x)
         out = self.bn1(out)
+        out = self.dropout(out)
         out = F.relu(out)
+        out = self.dropout(out)
         out = self.conv2(out)
         out = self.bn2(out)
         out += self.shortcut(x) # 필요에 따라 layer를 Skip
