@@ -10,6 +10,7 @@ import random
 import matplotlib.pyplot as plt
 import shap
 import time, sys
+import os
 
 from ResNet import Bottleneck, ResNet, ResNet50, ResNet18, ResNet34, ResNet101, ResNet152
 from torch.utils.data import Dataset
@@ -23,12 +24,22 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mdsm_width = 11
 mdsm_height = 108
 
-EPOCHS = 400
+EPOCHS = 1
 BATCH_SIZE = 512
 net_type = "ResNet18"
 
 path = "/tf/data/MDSM_ResNetbased/"
 trans_stat = True
+
+now = datetime.now(timezone('Asia/Seoul'))
+time_str = now.strftime('%Y-%m-%d_%H%M%S')
+
+data_path = path
+path = path + "results/" + time_str + "/"
+os.makedirs(path)
+os.makedirs(path + "training_metrics")
+os.makedirs(path + "check_points")
+os.makedirs(path + "graphs")
 
 def mix_random(col, row, mdsm_body):
     size_suffle = random.randint(0,10)
@@ -126,7 +137,7 @@ summary(net, (1, mdsm_height, mdsm_width))
 
 print('-- Loading dataset--')
 
-dataset = MDSMDataset(path+'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
+dataset = MDSMDataset(data_path +'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
 train_size = round(len(dataset) * 0.8)
 test_size = len(dataset) - train_size
 
@@ -245,13 +256,10 @@ trans_stat = False
 end = time.time()
 print(f"{net_type} training takes {end - start:.5f} sec")
 
-now = datetime.now(timezone('Asia/Seoul'))
-
 hist_csv = np.stack([mae_history['val'], mse_history['val'], mae_history['train'],
                      mse_history['train'], acc_history['train']], 1)
 hist_csv_df = pd.DataFrame(hist_csv)
 hist_csv_df.columns = ['validation_mae', 'validation_mse', 'train_mae', 'train_mse', 'train_accuracy']
-time_str = now.strftime('%Y-%m-%d_%H:%M:%S')
 hist_csv_df.to_csv(path+"training_metrics/amazon_hmdvr_df_tokenized_sentiment_score_model-{}_epochs-{}-batch-{}-{}.csv"
                    .format(net_type, EPOCHS, BATCH_SIZE, time_str), index=False)
 print(path+"training_metrics/amazon_hmdvr_df_tokenized_sentiment_score_model-{}_epochs-{}-batch-{}-{}.csv saved"
@@ -325,15 +333,15 @@ test_images = images[max_size:shap_test_size]
 e = shap.DeepExplainer(net, background.to(device))
 #shap_values = e.shap_values(test_images)
 
-df = pd.read_csv(path+'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
+df = pd.read_csv(data_path +'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
 dff = df.drop(['reviewNo', 'ReviewID', 'reviewStar', 'mGNR'], axis=1)
 
 shap.initjs()
 
 print('-- Building shap test dataset / dataloader--')
 for i in range(5):
-    dataset_shap = MDSMDataset(path+f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv')
-    print(path+f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
+    dataset_shap = MDSMDataset(data_path +f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv')
+    print(data_path +f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
 
     shap_shap_loader = torch.utils.data.DataLoader(dataset_shap, batch_size = len(dataset_shap), shuffle=True, num_workers=0)
 
@@ -346,22 +354,20 @@ for i in range(5):
     shap_values_shap = e.shap_values(test_images_shap)
     
     print(f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
-    
-    
-    
+        
     plt.clf()
     shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,show=False)
     plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png"
-            .format(i+1, max_size, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
     print(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png is saved"
-            .format(i+1, max_size, net_type, EPOCHS, BATCH_SIZE, time_str))
+            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str))
     
     plt.clf()
     shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,plot_type='bar',show=False)
     plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png"
-            .format(i+1, max_size, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
     print(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png is saved"
-            .format(i+1, max_size, net_type, EPOCHS, BATCH_SIZE, time_str))
+            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str))
 # plt.clf()
 # shap.summary_plot(shap_values[0][0][0], images[:][0][0], feature_names=dff.columns,show=False)
 # plt.savefig("graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-{}_summary_epochs-{}-batch-{}-{}.png"
