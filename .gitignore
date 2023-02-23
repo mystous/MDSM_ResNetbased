@@ -6,3 +6,4 @@ models/
 check_points/
 check_points/latest.pt
 check_points/latest.model
+graphs/
