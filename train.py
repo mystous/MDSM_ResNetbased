@@ -10,42 +10,92 @@ import random
 import matplotlib.pyplot as plt
 import shap
 import time, sys
+import numpy
 import os
 
 from ResNet import Bottleneck, ResNet, ResNet50, ResNet18, ResNet34, ResNet101, ResNet152
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 from torch.utils.data.dataset import random_split
 from torchvision import models
 from torchsummary import summary
 from datetime import datetime
 from pytz import timezone
+from IPython.display import clear_output
+
+def is_running_on_ipython():
+    try:
+        __IPYTHON__
+        return True
+    except NameError:
+        return False
+    
+#arg[1]
+EPOCHS = 400
+#arg[2]
+BATCH_SIZE = 512
+#arg[3]
+net_type = "ResNet34"
+#arg[4]
+split_random = False
+#arg[5]
+path = ""
+
+
+web_running = is_running_on_ipython()
+
+def print_out_hyperparameter():
+    print("Hyper-parameter of this Running")
+    print(f"Working Path[{path}], EPOCHS[{EPOCHS}], BATCH_SIZE[{BATCH_SIZE}], Model[{net_type}], Training data Split[{split_random}]")
+
+if len(sys.argv) >= 2 and web_running == False:
+    for i in range(1, len(sys.argv)):
+        if i == 1:
+            path = sys.argv[i] + "/"
+        elif i == 2:
+            EPOCHS = int(sys.argv[i])
+        elif i == 3:
+            BATCH_SIZE = int(sys.argv[i])
+        elif i == 4:
+            net_type = sys.argv[i]
+        elif i == 5:
+            split_random = eval(sys.argv[i])
+
+print(sys.argv)
+print_out_hyperparameter()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mdsm_width = 11
 mdsm_height = 108
-
-EPOCHS = 1000
-BATCH_SIZE = 512
-net_type = "ResNet18"
-
-path = "/tf/data/MDSM_ResNetbased/"
 trans_stat = True
+
 
 now = datetime.now(timezone('Asia/Seoul'))
 time_str = now.strftime('%Y-%m-%d_%H%M%S')
+hyperparameter_str = "model-{}_epochs-{}-batch-{}-randomsplit-{}-{}".format(net_type, EPOCHS, BATCH_SIZE, split_random, time_str)
 
 data_path = path
-path = path + "results/" + time_str + "/"
+if web_running:
+    path = path + "results/" + time_str + "_jupyter/"
+else:
+    path = path + "results/" + time_str + "/"
 os.makedirs(path)
 os.makedirs(path + "training_metrics")
 os.makedirs(path + "check_points")
 os.makedirs(path + "graphs")
 
+
+# ### 3. Define MDSMdata set for torch Dataset and Dataloader and other
+# * mix_random : For preventing overfitting (Mixing row randomly in MDSM metric
+# * flip_random : For preventing overfitting (Flip MDSM upside-down)
+
+# In[3]:
+
+
 def mix_random(col, row, mdsm_body):
     size_suffle = random.randint(0,10)
     switchsource = torch.randint(0, row - 1, (size_suffle,))
     temp = np.zeros((1, col), np.float32)
-
+    
     for i in range(0, int(size_suffle)):
         if i == switchsource[i]:
             continue
@@ -58,14 +108,14 @@ def flip_random(col, row, mdsm_body):
     size_suffle = random.randint(0,12)
     if size_suffle % 4 != 0:
         return torch.tensor(mdsm_body)
-
+    
     int_row = int(row)
     for i in range(0, int(int_row / 2)):
         temp = mdsm_body[i, :].copy()
         mdsm_body[i, :] = mdsm_body[int_row - i - 1, :].copy()
         mdsm_body[int_row - i - 1, :] = temp.copy()
     return torch.tensor(mdsm_body)
-
+    
 class MDSMDataset(Dataset):
     def __init__(self, mdsmdata_file):
         self.df = pd.read_csv(mdsmdata_file)
@@ -83,8 +133,9 @@ class MDSMDataset(Dataset):
         body_height, body_width = mdsm_body.shape;
         self.width = body_width - 1
         mdsm_width = self.width
-        mdsm_height = self.height
-
+        if trans_stat == True:
+            mdsm_height = self.height
+        
         dummy_mdsd = np.zeros((body_height, self.height, self.width), np.float32)
         mdsm_index = np.zeros(self.rating['ReviewID'].max()+1, int)
         mdsm_count = np.zeros(self.rating['ReviewID'].max()+1, int)
@@ -103,11 +154,11 @@ class MDSMDataset(Dataset):
             mdsm_count[dummy_index] = mdsm_count[dummy_index] + 1
 
         self.mdsm_body = dummy_mdsd
-
+            
     def __len__(self):
         return self.rating.shape[0]
 
-
+    
     def __getitem__(self, idx):
         if trans_stat == True:
             _tensor = flip_random(self.width, self.height, self.mdsm_body[idx])
@@ -115,6 +166,14 @@ class MDSMDataset(Dataset):
             _tensor = torch.tensor(self.mdsm_body[idx])
         rtn_tensor = _tensor.unsqueeze(0)
         return rtn_tensor, self.rating.iloc[idx, 1]
+
+
+# ### 4. Hyperparameter setting
+# * epochs, batch_size ResNet layer number
+# * select ResNet model
+# * print out Model strucuture
+
+# In[4]:
 
 
 if net_type == "ResNet18":
@@ -135,21 +194,46 @@ elif net_type == "ResNet152":
 
 summary(net, (1, mdsm_height, mdsm_width))
 
+
+# ### 5. Load MDSM dataset from preprocesed csv file
+# * split train and test dataset into 8:2 ratio
+# * 6 kinds of classess [0, 1, 2, 3, 4, 5]
+
+# In[5]:
+
+
 print('-- Loading dataset--')
 
-dataset = MDSMDataset(data_path +'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
+dataset = MDSMDataset(data_path + 'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
 train_size = round(len(dataset) * 0.8)
 test_size = len(dataset) - train_size
+
+
+# In[6]:
+
 
 print("Train(", train_size, ") vs Test(", test_size, ")")
 
 print('-- Building train and test dataset / dataloader--')
-train_dataset, test_dataset = random_split(dataset, [int(train_size),int(test_size)])
+
+if split_random:
+    print("Training dataset is selected random")
+    train_dataset, test_dataset = random_split(dataset, [int(train_size),int(test_size)])
+else:
+    print("Training dataset is selected fixed")
+    train_dataset = Subset(dataset, numpy.arange(1, train_size))
+    test_dataset = Subset(dataset, numpy.arange(train_size, len(dataset)))
 
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size = BATCH_SIZE, shuffle=True, num_workers=0)
 testloader = torch.utils.data.DataLoader(test_dataset, batch_size = BATCH_SIZE, shuffle=True, num_workers=0)
 
 classes = ['0', '1', '2', '3', '4', '5']
+
+
+# ### 6. Define mae and mse calcuating function
+
+# In[7]:
+
 
 def calcu_metric(outputs, labels):
     mae = abs(outputs - labels)
@@ -157,6 +241,14 @@ def calcu_metric(outputs, labels):
     mape = abs((outputs-labels)/labels)
     mbe = outputs - labels
     return mae, mse, mape, mbe
+
+
+# ### 7. Do ResNet training
+
+# In[8]:
+
+
+print_out_hyperparameter()
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0001)
@@ -198,6 +290,7 @@ for epoch in range(EPOCHS):
     running_loss = 0
     train_loss = 0
     train_acc = 0
+    val_acc = 0
     for i, inp in enumerate(trainloader):
         inputs, labels = inp
         inputs, labels = inputs.to('cuda'), labels.to('cuda')
@@ -253,6 +346,8 @@ for epoch in range(EPOCHS):
             outputs = net(images)
 
             pred = outputs.data.max(1, keepdim=True)[1]
+            val_acc += pred.eq(labels.data.view_as(pred)).sum()
+        
             _mae, _mse, _mape, _mbe  = calcu_metric(pred.squeeze(), labels)
             val_mae[metric_index:metric_index+len(images)] = _mae.detach().cpu().numpy()
             val_mse[metric_index:metric_index+len(images)] = _mse.detach().cpu().numpy()
@@ -272,6 +367,7 @@ for epoch in range(EPOCHS):
     mbe_history['val'].append(val_mbe_epoch)
     
     acc_history['train'].append((100. * train_acc / len(trainloader.dataset)).detach().cpu().numpy())
+    acc_history['val'].append((100. * val_acc / len(testloader.dataset)).detach().cpu().numpy())
     
     train_loss /= len(trainloader.dataset)
     if EPOCHS > 50:
@@ -285,158 +381,256 @@ trans_stat = False
 end = time.time()
 print(f"{net_type} training takes {end - start:.5f} sec")
 
-hist_csv = np.stack([mae_history['val'], mse_history['val'], rmse_history['val'], mape_history['val'], mbe_history['val'],
-                         mae_history['train'], mse_history['train'], rmse_history['train'], mape_history['train'],mbe_history['train'],
-                                              acc_history['train']], 1)
+
+# ### 8. Save model metrics into csv file
+# * Hyperparameter were written in filename
+
+# In[9]:
+
+
+hist_csv = np.stack([mae_history['val'], mse_history['val'], rmse_history['val'], mape_history['val'], mbe_history['val'], 
+                     acc_history['val'],
+                     mae_history['train'], mse_history['train'], rmse_history['train'], mape_history['train'],mbe_history['train'],
+                     acc_history['train']], 1)
 hist_csv_df = pd.DataFrame(hist_csv)
-hist_csv_df.columns = ['validation_mae', 'validation_mse', 'validation_rmse', 'validation_mape', 'validation_mbe',
-                               'train_mae', 'train_mse', 'train_rmse', 'train_mape', 'train_mbe', 'train_accuracy']
+hist_csv_df.columns = ['validation_mae', 'validation_mse', 'validation_rmse', 'validation_mape', 'validation_mbe', 'validation_accuracy',
+                       'train_mae', 'train_mse', 'train_rmse', 'train_mape', 'train_mbe', 'train_accuracy']
 
-hist_csv_df.to_csv("training_metrics/amazon_hmdvr_df_tokenized_sentiment_score_model-{}_epochs-{}-batch-{}-{}.csv"
-                           .format(net_type, EPOCHS, BATCH_SIZE, time_str), index=False)
-print("training_metrics/amazon_hmdvr_df_tokenized_sentiment_score_model-{}_epochs-{}-batch-{}-{}.csv saved"
-                           .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+hist_csv_df.to_csv("{}training_metrics/amazon_hmdvr_df_tokenized_sentiment_score_{}.csv"
+                   .format(path, hyperparameter_str), index=False)
+print("{}training_metrics/amazon_hmdvr_df_tokenized_sentiment_score_{}.csv saved"
+                   .format(path, hyperparameter_str))
 
 torch.save({
                 "epoch": EPOCHS,
                 "model_state_dict": net.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-            },
-           "{}check_points/amazon_hmdvr_df_tokenized_sentiment_score_model-{}_epochs-{}-batch-{}-{}.pt"
-                   .format(path,net_type, EPOCHS, BATCH_SIZE, time_str))
+            }, "{}check_points/amazon_hmdvr_df_tokenized_sentiment_score_{}.pt".format(path, hyperparameter_str))
 torch.save({
                 "epoch": EPOCHS,
                 "model_state_dict": net.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-            },path+"check_points/latest.pt")
-torch.save(net, "{}check_points/amazon_hmdvr_df_tokenized_sentiment_score_model-{}_epochs-{}-batch-{}-{}.model"
-                   .format(path,net_type, EPOCHS, BATCH_SIZE, time_str))
-torch.save(net, path+"check_points/latest.model")
+            },path + "check_points/latest.pt")
+torch.save(net, "{}check_points/amazon_hmdvr_df_tokenized_sentiment_score_.model".format(path, hyperparameter_str))
+torch.save(net, path + "check_points/latest.model")
 
-print(path+"check_points/amazon_hmdvr_df_tokenized_sentiment_score_model-{}_epochs-{}-batch-{}-{}.pt & check_points/latest.pt saved"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+print("{}check_points/amazon_hmdvr_df_tokenized_sentiment_score_.pt & check_points/latest.pt saved".format(path, hyperparameter_str))
 
-plt.title("Mean Abs Error [STR] : model-{}_epochs-{}_batch-{}-{}"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+
+# ### 9. Plot model metrics
+
+# In[10]:
+
+
+if web_running == True:
+    plt.title("Mean Abs Error [STR] : model-{}_epochs-{}_batch-{}-{}"
+                       .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+    plt.plot(range(1,EPOCHS+1),mae_history["train"],label="train_mae")
+    plt.plot(range(1,EPOCHS+1),mae_history["val"],label="validation_mae")
+    plt.ylabel("Mean Abs Error [STR]")
+    plt.xlabel("Training Epochs")
+    plt.ylim([0,1.5])
+    plt.legend()
+    plt.show()
+
+    plt.title("Mean Square Error [$STR^2$] : model-{}_epochs-{}_batch-{}-{}"
+                       .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+    plt.plot(range(1,EPOCHS+1),mse_history["train"],label="train_mse")
+    plt.plot(range(1,EPOCHS+1),mse_history["val"],label="validation_mse")
+    plt.ylabel("Mean Square Error [$STR^2$]")
+    plt.xlabel("Training Epochs")
+    plt.ylim([0,5])
+    plt.legend()
+    plt.show()
+
+    plt.title("Root Mean Squared Error: model-{}_epochs-{}_batch-{}-{}"
+                       .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+    plt.plot(range(1,EPOCHS+1),rmse_history["train"],label="train_rmse")
+    plt.plot(range(1,EPOCHS+1),rmse_history["val"],label="validation_rmse")
+    plt.ylabel("Root Mean Squared Error")
+    plt.xlabel("Training Epochs")
+    #plt.ylim([0,1.5])
+    plt.legend()
+    plt.show()
+
+    plt.title("Mean Absolute Percentage Error : model-{}_epochs-{}_batch-{}-{}"
+                       .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+    plt.plot(range(1,EPOCHS+1),mape_history["train"],label="train_mape")
+    plt.plot(range(1,EPOCHS+1),mape_history["val"],label="validation_mape")
+    plt.ylabel("Mean Absolute Percentage Error(%)")
+    plt.xlabel("Training Epochs")
+    plt.ylim([0,100])
+    plt.legend()
+    plt.show()
+
+    plt.title("Mean Bias Error : model-{}_epochs-{}_batch-{}-{}"
+                       .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+    plt.plot(range(1,EPOCHS+1),mbe_history["train"],label="train_mbe")
+    plt.plot(range(1,EPOCHS+1),mbe_history["val"],label="validation_mbe")
+    plt.ylabel("Mean Bias Error")
+    plt.xlabel("Training Epochs")
+    plt.ylim([0,1.5])
+    plt.legend()
+    plt.show()
+
+    plt.title("Train Accuracy : model-{}_epochs-{}_batch-{}-{}"
+                       .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+    plt.plot(range(1,EPOCHS+1),acc_history["train"],label="train_accuracy")
+    plt.plot(range(1,EPOCHS+1),acc_history["val"],label="validation_accuracy")
+    #plt.plot(range(1,EPOCHS+1),mse_history["val"],label="validation mse")
+    plt.ylabel("Train Accuracy")
+    plt.xlabel("Training Epochs")
+    #plt.ylim([0,1.5])
+    plt.legend()
+    plt.show()
+
+
+# In[11]:
+
+
+plt.clf()
+plt.title("Mean Abs Error [STR] : {}".format(hyperparameter_str))
 plt.plot(range(1,EPOCHS+1),mae_history["train"],label="train_mae")
 plt.plot(range(1,EPOCHS+1),mae_history["val"],label="validation_mae")
 plt.ylabel("Mean Abs Error [STR]")
 plt.xlabel("Training Epochs")
 plt.ylim([0,1.5])
 plt.legend()
-plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mae_model-{}_epochs-{}-batch-{}-{}.png"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
-plt.clf()
+plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mae_{}.png".format(hyperparameter_str), dpi=300)
 
-plt.title("Mean Square Error [$STR^2$] : model-{}_epochs-{}_batch-{}-{}"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+plt.clf()
+plt.title("Mean Square Error [$STR^2$] : {}".format(hyperparameter_str))
 plt.plot(range(1,EPOCHS+1),mse_history["train"],label="train_mse")
 plt.plot(range(1,EPOCHS+1),mse_history["val"],label="validation_mse")
 plt.ylabel("Mean Square Error [$STR^2$]")
 plt.xlabel("Training Epochs")
-plt.ylim([0,1.5])
+plt.ylim([0,5])
 plt.legend()
-plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mse_model-{}_epochs-{}-batch-{}-{}.png"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mse_{}.png".format(hyperparameter_str), dpi=300)
 
-plt.title("Root Mean Squared Error: model-{}_epochs-{}_batch-{}-{}"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+plt.clf()
+plt.title("Root Mean Squared Error: {}".format(hyperparameter_str))
 plt.plot(range(1,EPOCHS+1),rmse_history["train"],label="train_rmse")
 plt.plot(range(1,EPOCHS+1),rmse_history["val"],label="validation_rmse")
 plt.ylabel("Root Mean Squared Error")
 plt.xlabel("Training Epochs")
+#plt.ylim([0,1.5])
 plt.legend()
-plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mrse_model-{}_epochs-{}-batch-{}-{}.png"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_rmse_{}.png".format(hyperparameter_str), dpi=300)
 
-plt.title("Mean Absolute Percentage Error : model-{}_epochs-{}_batch-{}-{}"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+plt.clf()
+plt.title("Mean Absolute Percentage Error : {}".format(hyperparameter_str))
 plt.plot(range(1,EPOCHS+1),mape_history["train"],label="train_mape")
 plt.plot(range(1,EPOCHS+1),mape_history["val"],label="validation_mape")
 plt.ylabel("Mean Absolute Percentage Error(%)")
 plt.xlabel("Training Epochs")
 plt.ylim([0,100])
 plt.legend()
-plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mape_model-{}_epochs-{}-batch-{}-{}.png"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mape_{}.png".format(hyperparameter_str), dpi=300)
 
-plt.title("Mean Bias Error : model-{}_epochs-{}_batch-{}-{}"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+plt.clf()
+plt.title("Mean Bias Error : {}".format(hyperparameter_str))
 plt.plot(range(1,EPOCHS+1),mbe_history["train"],label="train_mbe")
 plt.plot(range(1,EPOCHS+1),mbe_history["val"],label="validation_mbe")
 plt.ylabel("Mean Bias Error")
 plt.xlabel("Training Epochs")
 plt.ylim([0,1.5])
 plt.legend()
-plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mbe_model-{}_epochs-{}-batch-{}-{}.png"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_mbe_{}.png".format(hyperparameter_str), dpi=300)
 
 plt.clf()
-plt.title("Train Accuracy : model-{}_epochs-{}_batch-{}-{}"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str))
+plt.title("Train Accuracy : {}".format(hyperparameter_str))
 plt.plot(range(1,EPOCHS+1),acc_history["train"],label="train_accuracy")
+plt.plot(range(1,EPOCHS+1),acc_history["val"],label="validation_accuracy")
 #plt.plot(range(1,EPOCHS+1),mse_history["val"],label="validation mse")
 plt.ylabel("Train Accuracy")
 plt.xlabel("Training Epochs")
 #plt.ylim([0,1.5])
 plt.legend()
-plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_acc_model-{}_epochs-{}-batch-{}-{}.png"
-                   .format(net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_acc_{}.png".format(hyperparameter_str), dpi=300)
+
+
+# ### 10. Using SHAP for XAI 
+
+# ___Shap command has to been excuted by manually after training finishing(need time gap)___
+
+# In[12]:
+
+
+df = pd.read_csv(data_path + 'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
+dff = df.drop(['reviewNo', 'ReviewID', 'reviewStar', 'mGNR'], axis=1)
+
+
+# In[13]:
+
 
 batch = next(iter(testloader))
 images, _ = batch
 
-#max_size = BATCH_SIZE - 3
-max_size = 100
-shap_test_size = max_size + 3
+#max_size = 100
+max_size = 200
+#max_size = BATCH_SIZE - 50
+#max_size = 400
+shap_test_size = max_size + 50
 
 background = images[:max_size]
 test_images = images[max_size:shap_test_size]
 
 #e = shap.DeepExplainer(net, background.to(device))
 e = shap.DeepExplainer(net, background.to(device))
-#shap_values = e.shap_values(test_images)
+shap_values = e.shap_values(test_images)
 
-df = pd.read_csv(data_path +'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized.csv')
-dff = df.drop(['reviewNo', 'ReviewID', 'reviewStar', 'mGNR'], axis=1)
+
+# In[14]:
+
 
 shap.initjs()
 
-print('-- Building shap test dataset / dataloader--')
-for i in range(5):
-    dataset_shap = MDSMDataset(data_path +f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv')
-    print(data_path +f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
 
-    shap_shap_loader = torch.utils.data.DataLoader(dataset_shap, batch_size = len(dataset_shap), shuffle=True, num_workers=0)
+# In[15]:
 
-    batch_shap = next(iter(shap_shap_loader))
-    images_shap, _ = batch_shap
 
-    max_size_shap = len(dataset_shap)
-  
-    test_images_shap = images_shap[:max_size_shap]
-    shap_values_shap = e.shap_values(test_images_shap)
-    
-    print(f'amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
-        
-    plt.clf()
-    shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,show=False)
-    plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png"
-            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
-    print(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png is saved"
-            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str))
-    
-    plt.clf()
-    shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,plot_type='bar',show=False)
-    plt.savefig(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png"
-            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
-    print(path+ "graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_model-{}_epochs-{}-batch-{}-{}.png is saved"
-            .format(i+1, max_size_shap, net_type, EPOCHS, BATCH_SIZE, time_str))
-# plt.clf()
-# shap.summary_plot(shap_values[0][0][0], images[:][0][0], feature_names=dff.columns,show=False)
-# plt.savefig("graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-{}_summary_epochs-{}-batch-{}-{}.png"
-#                    .format(max_size, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
-# plt.clf()
-# shap.summary_plot(shap_values[0][0][0], images[:][0][0], feature_names=dff.columns,plot_type='bar',show=False)
-# plt.savefig("graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary_bar-{}_model-{}_epochs-{}-batch-{}-{}.png"
-#                    .format(max_size, net_type, EPOCHS, BATCH_SIZE, time_str), dpi=300)
+shap.summary_plot(shap_values[0][0][0], images[:][0][0], feature_names=dff.columns)
+shap.summary_plot(shap_values[0][0][0], images[:][0][0], feature_names=dff.columns,plot_type='bar')
+
+
+# print('-- Building shap test dataset / dataloader--')
+# for i in range(5):
+#     dataset_shap = MDSMDataset(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv')
+#     print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
+# 
+#     shap_shap_loader = torch.utils.data.DataLoader(dataset_shap, batch_size = len(dataset_shap), shuffle=True, num_workers=0)
+# 
+#     batch_shap = next(iter(shap_shap_loader))
+#     images_shap, _ = batch_shap
+# 
+#     max_size_shap = len(dataset_shap)
+#   
+#     test_images_shap = images_shap[:max_size_shap]
+#     shap_values_shap = e.shap_values(test_images_shap)
+#     
+#     clear_output(wait=True)
+#     print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
+#     
+#     shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns)
+#     shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,plot_type='bar')
+#     
+#     plt.clf()
+#     shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,show=False)
+#     plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_{}.png"
+#             .format(path, i+1, max_size, hyperparameter_str), dpi=300)
+#     print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_{}.png is saved"
+#             .format(path, i+1, max_size, hyperparameter_str))
+#     
+#     plt.clf()
+#     shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,plot_type='bar',show=False)
+#     plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_{}.png"
+#             .format(path, i+1, max_size, hyperparameter_str), dpi=300)
+#     print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_{}.png is saved"
+#             .format(path, i+1, max_size, hyperparameter_str))
+
+# In[ ]:
+
+
+print_out_hyperparameter()
+

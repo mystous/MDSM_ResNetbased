@@ -8,3 +8,4 @@ check_points/latest.pt
 check_points/latest.model
 graphs/
 results/
+training_metrics/
