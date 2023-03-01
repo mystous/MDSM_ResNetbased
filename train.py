@@ -40,12 +40,11 @@ split_random = False
 #arg[5]
 path = ""
 
-
 web_running = is_running_on_ipython()
 
 def print_out_hyperparameter():
     print("Hyper-parameter of this Running")
-    print(f"Working Path[{path}], EPOCHS[{EPOCHS}], BATCH_SIZE[{BATCH_SIZE}], Model[{net_type}], Training data Split[{split_random}]")
+    print(f"Working Path[{start_path}], EPOCHS[{EPOCHS}], BATCH_SIZE[{BATCH_SIZE}], Model[{net_type}], Training data Split[{split_random}]")
 
 if len(sys.argv) >= 2 and web_running == False:
     for i in range(1, len(sys.argv)):
@@ -60,6 +59,7 @@ if len(sys.argv) >= 2 and web_running == False:
         elif i == 5:
             split_random = eval(sys.argv[i])
 
+start_path = path
 print(sys.argv)
 print_out_hyperparameter()
 
