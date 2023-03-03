@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import matplotlib
 import shap
 import time, sys
 import numpy
@@ -31,7 +32,7 @@ def is_running_on_ipython():
         return False
     
 #arg[1]
-EPOCHS = 1000
+EPOCHS = 10
 #arg[2]
 BATCH_SIZE = 512
 #arg[3]
@@ -625,51 +626,87 @@ shap.initjs()
 # plt.suptitle(f"SHAP analysis for rating \'{i+1}\'", fontsize=45, y=0.94)
 # plt.show()
 
-# In[18]:
+# print('-- Building shap test dataset / dataloader--')
+# for i in range(5):
+#     dataset_shap = MDSMDataset(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv')
+#     print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
+# 
+#     shap_shap_loader = torch.utils.data.DataLoader(dataset_shap, batch_size = len(dataset_shap), shuffle=True, num_workers=0)
+# 
+#     batch_shap = next(iter(shap_shap_loader))
+#     images_shap, _ = batch_shap
+# 
+#     max_size_shap = len(dataset_shap)
+#   
+#     test_images_shap = images_shap[:max_size_shap]
+#     shap_values_shap = e.shap_values(test_images_shap)
+#     
+#     clear_output(wait=True)
+#     print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
+#     
+#     plt.clf()
+#     fig, axes = plt.subplots(3,3, figsize=(21,20))
+#     for j in range(3,dff.shape[1]):
+#         _x = (j-3) / 3
+#         _x = math.floor(_x)
+#         _y = (j-3) % 3
+#         x_val = test_images_shap[:,0,:,j].ravel()
+#         y_val = shap_values_shap[0][:,0,:,j].ravel()
+#         col = np.where(y_val<0,'deeppink', 'mediumblue')
+#         axes[_x][_y].scatter(x_val, y_val, s=3, c=col)
+#         ylabel_str = "SHAP value for\n" + dff.columns[i]
+#         axes[_x][_y].set_xlabel(dff.columns[j], fontsize=20)
+#         axes[_x][_y].set_ylabel(ylabel_str, fontsize=20)
+#         axes[_x][_y].set_ylim([-1, 1])
+#         axes[_x][_y].tick_params(labelsize=15)
+#     axes[2][2].set_visible(False)
+#     plt.subplots_adjust(wspace=0.5, hspace=0.3)
+#     plt.suptitle(f"SHAP analysis for rating \'{i+1}\'", fontsize=45, y=0.94)
+#     #plt.show()
+#     plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png"
+#             .format(path, i+1, max_size, hyperparameter_str), dpi=300)
+#     print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png is saved"
+#             .format(path, i+1, max_size, hyperparameter_str))
+#     
+#     #shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns)
+#     #shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,plot_type='bar')
+#     
+#     #plt.clf()
+#     #shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,show=False)
+#     #plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_{}.png"
+#     #        .format(path, i+1, max_size, hyperparameter_str), dpi=300)
+#     #print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-data_{}-{}_{}.png is saved"
+#     #        .format(path, i+1, max_size, hyperparameter_str))
+#     
+#     #plt.clf()
+#     #shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,plot_type='bar',show=False)
+#     #plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_{}.png"
+#     #        .format(path, i+1, max_size, hyperparameter_str), dpi=300)
+#     #print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_{}.png is saved"
+#     #        .format(path, i+1, max_size, hyperparameter_str))
+
+# In[ ]:
 
 
 print('-- Building shap test dataset / dataloader--')
-for i in range(5):
-    dataset_shap = MDSMDataset(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv')
-    print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
 
-    shap_shap_loader = torch.utils.data.DataLoader(dataset_shap, batch_size = len(dataset_shap), shuffle=True, num_workers=0)
+dataset_shap = MDSMDataset(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended.csv')
+print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended.csv is used for shap analysis')
 
-    batch_shap = next(iter(shap_shap_loader))
-    images_shap, _ = batch_shap
+shap_shap_loader = torch.utils.data.DataLoader(dataset_shap, batch_size = len(dataset_shap), shuffle=True, num_workers=0)
 
-    max_size_shap = len(dataset_shap)
-  
-    test_images_shap = images_shap[:max_size_shap]
-    shap_values_shap = e.shap_values(test_images_shap)
-    
-    clear_output(wait=True)
-    print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended_normalized_reviewStar{i+1}.csv is used for shap analysis')
-    
-    plt.clf()
-    fig, axes = plt.subplots(3,3, figsize=(21,20))
-    for j in range(3,dff.shape[1]):
-        _x = (j-3) / 3
-        _x = math.floor(_x)
-        _y = (j-3) % 3
-        x_val = test_images_shap[:,0,:,j].ravel()
-        y_val = shap_values_shap[0][:,0,:,j].ravel()
-        col = np.where(y_val<0,'deeppink', 'mediumblue')
-        axes[_x][_y].scatter(x_val, y_val, s=3, c=col)
-        ylabel_str = "SHAP value for\n" + dff.columns[i]
-        axes[_x][_y].set_xlabel(dff.columns[j], fontsize=20)
-        axes[_x][_y].set_ylabel(ylabel_str, fontsize=20)
-        axes[_x][_y].set_ylim([-1, 1])
-        axes[_x][_y].tick_params(labelsize=15)
-    axes[2][2].set_visible(False)
-    plt.subplots_adjust(wspace=0.5, hspace=0.3)
-    plt.suptitle(f"SHAP analysis for rating \'{i+1}\'", fontsize=45, y=0.94)
-    #plt.show()
-    plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png"
-            .format(path, i+1, max_size, hyperparameter_str), dpi=300)
-    print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png is saved"
-            .format(path, i+1, max_size, hyperparameter_str))
-    
+batch_shap = next(iter(shap_shap_loader))
+images_shap, _ = batch_shap
+
+max_size_shap = len(dataset_shap)
+
+test_images_shap = images_shap[:max_size_shap]
+shap_values_shap = e.shap_values(test_images_shap)
+
+clear_output(wait=True)
+print(f'{data_path}amazon_hmdvr_df_tokenized_sentiment_score_extended.csv is used for shap analysis')
+
+   
     #shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns)
     #shap.summary_plot(shap_values_shap[0][0][0], images_shap[:][0][0], feature_names=dff.columns,plot_type='bar')
     
@@ -687,6 +724,79 @@ for i in range(5):
     #print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap_summary-bar-data_{}-{}_{}.png is saved"
     #        .format(path, i+1, max_size, hyperparameter_str))
 
+
+# plt.clf()
+# fig, axes = plt.subplots(3,3, figsize=(21,20))
+# for j in range(3,dff.shape[1]):
+#     _x = (j-3) / 3
+#     _x = math.floor(_x)
+#     _y = (j-3) % 3
+#     x_val = test_images_shap[:,0,:,j].ravel()
+#     y_val = shap_values_shap[0][:,0,:,j].ravel()
+#     col = np.where(y_val<0,'deeppink', 'mediumblue')
+#     axes[_x][_y].scatter(x_val, y_val, s=3, c=col)
+#     ylabel_str = "SHAP value for\n" + dff.columns[j]
+#     axes[_x][_y].set_xlabel(dff.columns[j], fontsize=20)
+#     axes[_x][_y].set_ylabel(ylabel_str, fontsize=20)
+#     axes[_x][_y].set_ylim([-1, 1])
+#     axes[_x][_y].tick_params(labelsize=15)
+# axes[2][2].set_visible(False)
+# plt.subplots_adjust(wspace=0.5, hspace=0.3)
+# plt.suptitle("SHAP analysis", fontsize=45, y=0.94)
+# if web_running == True:
+#     plt.show()
+# else:
+#     plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png"
+#             .format(path, i+1, max_size, hyperparameter_str), dpi=300)
+# print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png is saved"
+#         .format(path, i+1, max_size, hyperparameter_str))
+
+# In[ ]:
+
+
+plt.clf()
+fig, axes = plt.subplots(3,3, figsize=(25,20))
+for j in range(3,dff.shape[1]):
+    _x = (j-3) / 3
+    _x = math.floor(_x)
+    _y = (j-3) % 3
+    y_val = test_images_shap[:,0,:,j].ravel()
+    x_val = shap_values_shap[0][:,0,:,j].ravel()
+    col = np.where(y_val<0,'deeppink', 'mediumblue')
+    axes[_x][_y].scatter(x_val, y_val, s=3, c=col)
+    #axes[_x][_y].scatter(x_val, y_val, s=3, c=y_val, cmap=matplotlib.colormaps['inferno'])
+    ylabel_str = "SHAP value for " + dff.columns[j]
+    axes[_x][_y].set_ylabel(dff.columns[j], fontsize=20)
+    axes[_x][_y].set_xlabel(ylabel_str, fontsize=20)
+    axes[_x][_y].set_xlim([-1, 1])
+    axes[_x][_y].tick_params(labelsize=15)
+axes[2][2].set_visible(False)
+plt.subplots_adjust(wspace=0.5, hspace=0.3)
+plt.suptitle("SHAP analysis", fontsize=45, y=0.94)
+if web_running == True:
+    plt.show()
+else:
+    plt.savefig("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png"
+            .format(path, i+1, max_size, hyperparameter_str), dpi=300)
+print("{}graphs/amazon_hmdvr_df_tokenized_sentiment_score_shap-data_{}-{}_{}.png is saved"
+        .format(path, i+1, max_size, hyperparameter_str))
+
+
+# plot_color_gradients('Perceptually Uniform Sequential',
+#                      ['viridis', 'plasma', 'inferno', 'magma', 'cividis'])
+
+# plt.clf()
+# y_val = test_images_shap[:,0,:,5].ravel()
+# x_val = shap_values_shap[0][:,0,:,5].ravel()
+# col = np.where(y_val<0,'deeppink', 'mediumblue')
+# plt.scatter(x_val, y_val, s=3, c=y_val, cmap=matplotlib.colormaps['inferno'])
+# ylabel_str = "SHAP value for " + dff.columns[j]
+# plt.ylabel(dff.columns[j], fontsize=20)
+# plt.xlabel(ylabel_str, fontsize=20)
+# plt.xlim([-1, 1])
+# axes[_x][_y].tick_params(labelsize=15)
+# plt.colorbar()
+# plt.show()
 
 # In[ ]:
 
