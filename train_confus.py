@@ -631,13 +631,13 @@ def plot_confusion_matrix(cm, target_names=None, cmap=None, normalize=True, labe
     plt.ylabel('True label')
     plt.xlabel('Predicted label\naccuracy={:0.4f}; misclass={:0.4f}'.format(accuracy, misclass))
     #plt.show()
-    plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_confustion_{}.png".format(hyperparameter_str), dpi=300)
+    plt.savefig(path + "graphs/amazon_hmdvr_df_tokenized_sentiment_score_confustion_{}.png".format(hyperparameter_str), dpi=300, bbox_inches='tight', pad_inches=0)
 
 
 # In[42]:
 
 
-plot_confusion_matrix(confusmatirx, target_names=['1', '2', '3', '4', '5'])
+plot_confusion_matrix(confusmatirx, target_names=['1', '2', '3', '4', '5'], title=f'{hyperparameter_str}\nConfusion matrix')
 
 print_out_hyperparameter()
 
