@@ -68,35 +68,6 @@ class Block(nn.Module):
       x = self.relu(x)
       return x
 
-
-class Block_Small(nn.Module):
-    expansion = 1
-    def __init__(self, in_channels, out_channels, i_downsample=None, stride=1):
-        super(Block, self).__init__()
-       
-
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=stride, bias=False)
-        self.batch_norm1 = nn.BatchNorm2d(out_channels)
- 
-        self.i_downsample = i_downsample
-        self.stride = stride
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-      identity = x.clone()
-
-      x = self.relu(self.batch_norm2(self.conv1(x)))
-      x = self.batch_norm2(self.conv2(x))
-
-      if self.i_downsample is not None:
-          identity = self.i_downsample(identity)
-      print(x.shape)
-      print(identity.shape)
-      x += identity
-      x = self.relu(x)
-      return x
-
-        
         
 class ResNet(nn.Module):
     def __init__(self, ResBlock, layer_list, num_classes, num_channels=3):
@@ -149,41 +120,6 @@ class ResNet(nn.Module):
             
         return nn.Sequential(*layers)
 
-class BasicBlockSmall(nn.Module):
-    expansion = 1
-    def __init__(self, in_planes, out_planes, i_downsample=None, stride=1):
-        super(BasicBlock, self).__init__()
-        
-        # stride를 통해 너비와 높이 조정
-        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_planes)
-        
-        # stride = 1, padding = 1이므로, 너비와 높이는 항시 유지됨
-        self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_planes)
-        
-        # x를 그대로 더해주기 위함
-        self.shortcut = nn.Sequential()
-        self.i_downsample = i_downsample
-        
-        
-        # 만약 size가 안맞아 합연산이 불가하다면, 연산 가능하도록 모양을 맞춰줌
-        if stride != 1: # x와 
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_planes)
-            )
-        self.dropout = nn.Dropout(0.25)
-    
-    def forward(self, x):
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out += self.shortcut(x) # 필요에 따라 layer를 Skip
-        out = self.dropout(out)
-        out = F.relu(out)
-        out = self.dropout(out)
-        return out
-
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -224,7 +160,7 @@ class BasicBlock(nn.Module):
         return out
     
 def ResNet6(num_classes, channels=3):
-    return ResNet(BasicBlockSmall, [1, 1, 1, 1], num_classes, channels)
+    return ResNet(BasicBlock, [1, 1], num_classes, channels)
 
 def ResNet10(num_classes, channels=3):
     return ResNet(BasicBlock, [1, 1, 1, 1], num_classes, channels)
